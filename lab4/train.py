@@ -6,6 +6,7 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import joblib
 import os
 import mlflow
+from mlflow.models import infer_signature
 
 def train_model():
     df = pd.read_csv('data/diamonds_processed.csv')
@@ -17,7 +18,6 @@ def train_model():
         X, y, test_size=0.2, random_state=42
     )
     
-
     model = RandomForestRegressor(
         n_estimators=100,
         max_depth=12,
@@ -27,7 +27,6 @@ def train_model():
     )
     model.fit(X_train, y_train)
     
-
     y_pred = model.predict(X_test)
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     mae = mean_absolute_error(y_test, y_pred)
@@ -36,20 +35,24 @@ def train_model():
     os.makedirs('models', exist_ok=True)
     joblib.dump(model, 'models/diamonds_model.pkl')
     
-
+    # Инференс сигнатуры на основе примера данных
+    signature = infer_signature(X_train, y_pred)
+    
     mlflow.set_tracking_uri("file:./mlruns")
     with mlflow.start_run(run_name="random_forest_diamonds"):
         mlflow.log_param("n_estimators", 100)
         mlflow.log_param("max_depth", 12)
+        mlflow.log_param("min_samples_split", 5)
         mlflow.log_metric("rmse", rmse)
         mlflow.log_metric("mae", mae)
         mlflow.log_metric("r2", r2)
-        mlflow.sklearn.log_model(model, "diamonds_model")
         
-        # Сохраняем модель
+        # Логируем модель ОДИН раз с сигнатурой и примером входных данных
         mlflow.sklearn.log_model(
             sk_model=model,
-            artifact_path="diamonds_model"
+            artifact_path="diamonds_model",
+            signature=signature,
+            input_example=X_train.iloc[:5]  # первые 5 строк как пример
         )
         
         # Получаем URI модели
@@ -60,9 +63,7 @@ def train_model():
         with open('model_uri.txt', 'w') as f:
             f.write(model_uri)
 
- 
     model_path = 'models/diamonds_model.pkl'
-
     print(model_path)
 
     return model
